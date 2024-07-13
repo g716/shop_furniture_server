@@ -182,12 +182,12 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
                 product_item = await db_shop_furniture.get_product(id_product)
                 photo = open(f'photo/{product_item[2]}.jpg', 'rb')
                 if int(product_item[5]) > 0:
-                    count_answer = """В наличии: """ + str(product_item[5]) + """ шт"""
+                    count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
                 else:
-                    count_answer = 'Нет в наличии'
-                await bot.send_photo(call.from_user.id, photo, caption=f'Название: {product_item[1]}\n'
-                                                                     f'Описание:\n{product_item[3]}\n'
-                                                                     f'Цена: {product_item[4]} р\n'
+                    count_answer = '🟩Нет в наличии'
+                await bot.send_photo(call.from_user.id, photo, caption=f'🟥Название: {product_item[1]}\n\n'
+                                                                     f'🟧Описание: {product_item[3]}\n\n'
+                                                                     f'🟨Цена: {product_item[4]} р\n\n'
                                                                      f'{count_answer}',
                                      reply_markup=keyboard.product_panel(product_item[0]))
         else:
@@ -293,14 +293,14 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
         id_order = call.data.split(';')[1]
         order = await db_shop_furniture.get_order(int(id_order))
         print(order)
-        message_admins = (f'ЗАКАЗ ОТМЕНЕН!\n'
-                          f'Название: {order[8]}\n'
-                          f'Описание:\n{order[10]}\n'
-                          f'Цена: {order[11]} р\n'
-                          f'О заказе:\n'
-                          f'Контактный телефон: {order[3]}\n'
-                          f'Адресс доставки: {order[4]}\n'
-                          f'Количество требуемого товара: {order[5]}')
+        message_admins = (f'📢ЗАКАЗ ОТМЕНЕН!\n\n'
+                          f'🟥Название: {order[8]}\n\n'
+                          f'🟧Описание: {order[10]}\n\n'
+                          f'🟨Цена: {order[11]} р\n\n'
+                          f'🟩О заказе:\n'
+                          f'      Контактный телефон: {order[3]}\n'
+                          f'      Адресс доставки: {order[4]}\n'
+                          f'      Количество требуемого товара: {order[5]}')
         for tg_id in await db_shop_furniture.get_admins():
             await bot.send_message(chat_id=tg_id[0], text=message_admins,
                                    reply_markup=await keyboard_panel.admin_panel())
@@ -440,12 +440,12 @@ async def product_list(message: types.Message):
                 product_panel = keyboard.product_panel(product_item[0])
             photo = open(f'photo/{product_item[2]}.jpg', 'rb')
             if int(product_item[5]) > 0:
-                count_answer = """В наличии: """ + str(product_item[5]) + """ шт"""
+                count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
             else:
-                count_answer = 'Нет в наличии'
-            await bot.send_photo(message.chat.id, photo, caption=f'Название: {product_item[1]}\n'
-                                 f'Описание:\n{product_item[3]}\n'
-                                 f'Цена: {product_item[4]} р\n'
+                count_answer = '🟩Нет в наличии'
+            await bot.send_photo(message.chat.id, photo, caption=f'🟥Название: {product_item[1]}\n\n'
+                                 f'🟧Описание: {product_item[3]}\n\n'
+                                 f'🟨Цена: {product_item[4]} р\n\n'
                                  f'{count_answer}',
                                  reply_markup=product_panel)
     else:
@@ -730,14 +730,14 @@ async def order_count_product(message: types.Message, state: FSMContext):
                 data['count_product'] = int(message.text)
                 id_product = data['id_product']
                 product_item = await db_shop_furniture.get_product(id_product)
-                message_admins = (f'ЗАКАЗ!\n'
-                                  f'Название: {product_item[1]}\n'
-                                  f'Описание:\n{product_item[3]}\n'
-                                  f'Цена: {product_item[4]} р\n'
-                                  f'О заказе:\n'
-                                  f'Контактный телефон: {data["phone_number"]}\n'
-                                  f'Адресс доставки: {data["address"]}\n'
-                                  f'Количество требуемого товара: {data["count_product"]}')
+                message_admins = (f'📢ЗАКАЗ!\n\n'
+                                  f'🟥Название: {product_item[1]}\n\n'
+                                  f'🟧Описание: {product_item[3]}\n\n'
+                                  f'🟨Цена: {product_item[4]} р\n\n'
+                                  f'🟩О заказе:\n'
+                                  f'      Контактный телефон: {data["phone_number"]}\n'
+                                  f'      Адресс доставки: {data["address"]}\n'
+                                  f'      Количество требуемого товара: {data["count_product"]}')
                 await db_shop_furniture.update_count_product(product_item[0],
                                                              int(product_item[5]) - int(data['count_product']))
             else:
