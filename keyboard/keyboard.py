@@ -58,7 +58,7 @@ class Panel:
             if bool(len(await self.db.get_products())):
                 panel.add('Товары')
             if bool(len(await self.db.get_orders())):
-                panel.add('')
+                panel.add('Заказы')
             panel.add('Каталоги')
             panel.add('Создать каталог')
             panel.add('Создать товар')
