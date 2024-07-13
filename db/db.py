@@ -151,9 +151,9 @@ class Database:
         self.connection.commit()
         return id_order
 
-    async def get_orders(self, id_order):
+    async def get_orders(self):
         self.cursor.execute(
-            "SELECT * FROM orders WHERE id = ?", (id_order,)
+            "SELECT * FROM orders"
         )
         return self.cursor.fetchall()
 
