@@ -9,11 +9,23 @@ def cancel_panel():
     return panel
 
 
-def order_panel():
+def orders_panel(tg_id):
     panel = InlineKeyboardMarkup(resize_keyboard=True, row_width=2)
-    panel.add(InlineKeyboardButton('Все', callback_data='all_orders'))
-    panel.add(InlineKeyboardButton('В работе', callback_data='work_orders'))
-    panel.add(InlineKeyboardButton('Выполненные', callback_data='ready_orders'))
+    panel.add(InlineKeyboardButton('Все', callback_data=f'all_orders;{tg_id}'))
+    panel.add(InlineKeyboardButton('В ожидании', callback_data=f'work_orders;{tg_id}'))
+    panel.add(InlineKeyboardButton('Полученные', callback_data=f'ready_orders;{tg_id}'))
+    return panel
+
+
+def order_panel_admin(id_order):
+    panel = InlineKeyboardMarkup(resize_keyboard=True, row_width=2)
+    panel.add(InlineKeyboardButton('Доставлен', callback_data=f'finish_order;{id_order}'))
+    return panel
+
+
+def order_panel_user(id_order):
+    panel = InlineKeyboardMarkup(resize_keyboard=True, row_width=2)
+    panel.add(InlineKeyboardButton('Отменить', callback_data=f'сancel_order;{id_order}'))
     return panel
 
 
@@ -53,7 +65,7 @@ class Panel:
 
     async def shop_panel(self, id_user):
         panel = ReplyKeyboardMarkup(resize_keyboard=True)
-        if bool(len(await self.db.get_order_user(id_user))):
+        if bool(len(await self.db.get_orders_user(id_user))):
             panel.add('Заказы')
         panel.add('Товары')
         panel.add('Каталоги')
@@ -71,6 +83,7 @@ class Panel:
             panel.add('Каталоги')
             panel.add('Создать каталог')
             panel.add('Создать товар')
+            panel.add('Получить ключ')
         return panel
 
     async def check_admin(self, tg_id: int):

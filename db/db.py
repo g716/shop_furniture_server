@@ -6,10 +6,10 @@ class Database:
         self.connection = sqlite3.connect(path_to_database)
         self.cursor = self.connection.cursor()
 
-    async def add_admin(self, tg_id, phone_number, state):
+    async def add_admin(self, tg_id, secret_key, state):
         self.cursor.execute(
-            "INSERT INTO admins (tg_id, phone_number, state) VALUES (?, ?, ?)",
-            (tg_id, phone_number, state)
+            "INSERT INTO admins (tg_id, secret_key, state) VALUES (?, ?, ?)",
+            (tg_id, secret_key, state)
         )
         self.connection.commit()
         return True
@@ -37,6 +37,14 @@ class Database:
     async def delete_admin(self, tg_id):
         self.cursor.execute(
             "DELETE FROM admins WHERE tg_id = ?", (tg_id,)
+        )
+        self.connection.commit()
+        return True
+
+    async def update_secret_key(self, secret_key):
+        self.cursor.execute(
+            "UPDATE admins SET secret_key = ? WHERE state='phone_number'",
+            (secret_key,)
         )
         self.connection.commit()
         return True
@@ -175,3 +183,49 @@ class Database:
             "SELECT * FROM orders where tg_id = ?", (id_user,)
         )
         return self.cursor.fetchall()
+
+    async def get_orders_finish(self):
+        self.cursor.execute(
+            "SELECT * FROM orders where state = 'finish'"
+        )
+        return self.cursor.fetchall()
+
+    async def get_orders_user_finish(self, id_user):
+        self.cursor.execute(
+            "SELECT * FROM orders where tg_id = ? and state = 'finish'", (id_user,)
+        )
+        return self.cursor.fetchall()
+
+    async def get_orders_waiting(self):
+        self.cursor.execute(
+            "SELECT * FROM orders where state = 'waiting'"
+        )
+        return self.cursor.fetchall()
+
+    async def get_orders_user_waiting(self, id_user):
+        self.cursor.execute(
+            "SELECT * FROM orders where tg_id = ? and state = 'waiting'", (id_user,)
+        )
+        return self.cursor.fetchall()
+
+    async def delete_order(self, id_order):
+        self.cursor.execute(
+            "DELETE FROM orders WHERE id = ?", (id_order,)
+        )
+        self.connection.commit()
+        return True
+
+    async def get_order(self, id_order):
+        self.cursor.execute(
+            'SELECT * '
+            'from orders join products on orders.id_product = products.id '
+            'where orders.id = ?', (id_order,)
+        )
+        return self.cursor.fetchone()
+
+    async def update_state_order(self, id_order):
+        self.cursor.execute(
+            "UPDATE orders SET state = 'finish' WHERE id = ?", (id_order,)
+        )
+        self.connection.commit()
+        return True
