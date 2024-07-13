@@ -75,6 +75,7 @@ class Panel:
         panel = ReplyKeyboardMarkup(resize_keyboard=True)
         if not bool(len(await self.db.get_catalogs())):
             panel.add('Создать каталог')
+            panel.add('Получить ключ')
         else:
             if bool(len(await self.db.get_products())):
                 panel.add('Товары')
