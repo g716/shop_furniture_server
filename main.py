@@ -102,6 +102,15 @@ async def show_order(call, admin, order, photo, status, product_item, markup=Tru
                                                                    f'🟪Заказанное количество: {order[5]}')
 
 
+@dp.callback_query_handler(state=OrderProduct.catalog)
+async def catalog_handler(query: types.CallbackQuery, state: FSMContext):
+    id_product = await db_shop_furniture.add_product(state)
+    id_catalog = await db_shop_furniture.get_catalog(query.data)
+    await db_shop_furniture.add_product_into_catalog(int(id_catalog), int(id_product))
+    await query.message.answer('Товар создан', reply_markup=await keyboard_panel.admin_panel())
+    await state.finish()
+
+
 @dp.callback_query_handler()
 async def callback_query(call: types.CallbackQuery, state: FSMContext):
     # Товары
@@ -689,15 +698,6 @@ async def add_item_photo(message: types.Message, state: FSMContext):
         await message.photo[-1].download(destination_file=f'photo/{message.photo[0].file_id}.jpg')
     await message.answer('Выберите каталог для товара', reply_markup=await keyboard_panel.inline_catalog_panel())
     await OrderProduct.next()
-
-
-@dp.callback_query_handler(state=OrderProduct.catalog)
-async def catalog_handler(query: types.CallbackQuery, state: FSMContext):
-    id_product = await db_shop_furniture.add_product(state)
-    id_catalog = await db_shop_furniture.get_catalog(query.data)
-    await db_shop_furniture.add_product_into_catalog(int(id_catalog), int(id_product))
-    await query.message.answer('Товар создан', reply_markup=await keyboard_panel.admin_panel())
-    await state.finish()
 
 
 @dp.message_handler(state=Order.phone_number)
