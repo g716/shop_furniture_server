@@ -169,3 +169,9 @@ class Database:
             'where catalogs_products.catalog = ? and products.count > 0', (id_catalog,)
         )
         return self.cursor.fetchall()
+
+    async def get_orders_user(self, id_user):
+        self.cursor.execute(
+            "SELECT * FROM orders where tg_id = ?", (id_user,)
+        )
+        return self.cursor.fetchall()

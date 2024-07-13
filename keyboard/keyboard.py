@@ -3,7 +3,7 @@ import asyncio
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 
-def shop_panel():
+def shop_panel(id_user):
     panel = ReplyKeyboardMarkup(resize_keyboard=True)
     panel.add('Товары')
     panel.add('Каталоги')
@@ -13,6 +13,14 @@ def shop_panel():
 def cancel_panel():
     panel = InlineKeyboardMarkup(resize_keyboard=True, row_width=2)
     panel.add(InlineKeyboardButton('Отмена', callback_data='cancel'))
+    return panel
+
+
+def order_panel():
+    panel = InlineKeyboardMarkup(resize_keyboard=True, row_width=2)
+    panel.add(InlineKeyboardButton('Все', callback_data='all_orders'))
+    panel.add(InlineKeyboardButton('В работе', callback_data='work_orders'))
+    panel.add(InlineKeyboardButton('Выполненные', callback_data='ready_orders'))
     return panel
 
 
