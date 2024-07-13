@@ -4,6 +4,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from db import db
 from keyboard import keyboard
+import random, string
 
 bot = Bot('7062289584:AAESDlt2059jXKdqO-8w2syJvW5qmkDLKbs')
 
@@ -47,6 +48,58 @@ class EditProduct(StatesGroup):
     count = State()
     image = State()
     catalog = State()
+
+
+class AddAdmin(StatesGroup):
+    secret_key = State()
+
+
+class DeleteAdmin(StatesGroup):
+    secret_key = State()
+
+
+def get_secret_key(length=10):
+    letters = string.ascii_letters
+    return ''.join(random.choice(letters) for i in range(length))
+
+
+async def show_order(call, admin, order, photo, status, product_item, markup=True):
+    if admin:
+        info_number_phone = order[3]
+        info_address = order[4]
+        if markup:
+            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+                                                                   f'🟨Название: {product_item[1]}\n\n'
+                                                                   f'🟩Описание: {product_item[3]}\n\n'
+                                                                   f'🟦Цена: {product_item[4]} р\n\n'
+                                                                   f'🟪Заказанное количество: {order[5]}\n\n'
+                                                                   f'⬛️О заказчике:\n'
+                                                                   f'      Номер телефона - {info_number_phone}\n'
+                                                                   f'      Адрес - {info_address}',
+                                 reply_markup=keyboard.order_panel_admin(order[0]))
+        else:
+            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+                                                                   f'🟨Название: {product_item[1]}\n\n'
+                                                                   f'🟩Описание: {product_item[3]}\n\n'
+                                                                   f'🟦Цена: {product_item[4]} р\n\n'
+                                                                   f'🟪Заказанное количество: {order[5]}\n\n'
+                                                                   f'⬛️О заказчике:\n'
+                                                                   f'      Номер телефона - {info_number_phone}\n'
+                                                                   f'      Адрес - {info_address}')
+    else:
+        if markup:
+            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+                                                                   f'🟨Название: {product_item[1]}\n\n'
+                                                                   f'🟩Описание: {product_item[3]}\n\n'
+                                                                   f'🟦Цена: {product_item[4]} р\n\n'
+                                                                   f'🟪Заказанное количество: {order[5]}',
+                                 reply_markup=keyboard.order_panel_user(order[0]))
+        else:
+            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+                                                                   f'🟨Название: {product_item[1]}\n\n'
+                                                                   f'🟩Описание: {product_item[3]}\n\n'
+                                                                   f'🟦Цена: {product_item[4]} р\n\n'
+                                                                   f'🟪Заказанное количество: {order[5]}')
 
 
 @dp.callback_query_handler()
@@ -129,12 +182,12 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
                 product_item = await db_shop_furniture.get_product(id_product)
                 photo = open(f'photo/{product_item[2]}.jpg', 'rb')
                 if int(product_item[5]) > 0:
-                    count_answer = """В наличии: """ + str(product_item[5]) + """ шт"""
+                    count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
                 else:
-                    count_answer = 'Нет в наличии'
-                await bot.send_photo(call.from_user.id, photo, caption=f'Название: {product_item[1]}\n'
-                                                                     f'Описание:\n{product_item[3]}\n'
-                                                                     f'Цена: {product_item[4]} р\n'
+                    count_answer = '🟩Нет в наличии'
+                await bot.send_photo(call.from_user.id, photo, caption=f'🟥Название: {product_item[1]}\n\n'
+                                                                     f'🟧Описание: {product_item[3]}\n\n'
+                                                                     f'🟨Цена: {product_item[4]} р\n\n'
                                                                      f'{count_answer}',
                                      reply_markup=keyboard.product_panel(product_item[0]))
         else:
@@ -153,13 +206,121 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
         await bot.send_message(chat_id=call.from_user.id, text='Введите новое название',
                                reply_markup=keyboard.cancel_panel())
 
+    if 'all_orders' in call.data:
+        await bot.send_message(chat_id=call.from_user.id, text='Все заказы:')
 
-@dp.callback_query_handler(state=[OrderProduct, OrderCatalog, Order, EditProduct, EditCatalog])
+        if not bool(len([item for item in await db_shop_furniture.get_admins()
+                         if item[0] == int(call.data.split(';')[1])])):
+            orders = await db_shop_furniture.get_orders_user(int(call.data.split(';')[1]))
+            admin = False
+        else:
+            orders = await db_shop_furniture.get_orders()
+            admin = True
+        for order in orders:
+            id_product = order[2]
+            product_item = await db_shop_furniture.get_product(id_product)
+            photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+            if 'waiting' == order[6]:
+                status = 'В ожидании'
+                markup = True
+            else:
+                status = 'Доставлен'
+                markup = False
+            await show_order(
+                call=call,
+                admin=admin,
+                photo=photo,
+                status=status,
+                product_item=product_item,
+                order=order,
+                markup=markup
+            )
+    if 'work_orders' in call.data:
+        await bot.send_message(chat_id=call.from_user.id, text='Заказы которые в статусе ожидания:')
+
+        if not bool(len([item for item in await db_shop_furniture.get_admins()
+                         if item[0] == int(call.data.split(';')[1])])):
+            orders = await db_shop_furniture.get_orders_user_waiting(int(call.data.split(';')[1]))
+            admin = False
+        else:
+            orders = await db_shop_furniture.get_orders_waiting()
+            admin = True
+        if len(orders) > 0:
+            for order in orders:
+                id_product = order[2]
+                product_item = await db_shop_furniture.get_product(id_product)
+                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                status = 'В ожидании'
+                await show_order(
+                    call=call,
+                    admin=admin,
+                    photo=photo,
+                    status=status,
+                    product_item=product_item,
+                    order=order,
+                )
+        else:
+            await bot.send_message(chat_id=call.from_user.id, text='Пока что то таких заказов нет')
+    if 'ready_orders' in call.data:
+        await bot.send_message(chat_id=call.from_user.id, text='Заказы которые доставлены:')
+
+        if not bool(len([item for item in await db_shop_furniture.get_admins()
+                         if item[0] == int(call.data.split(';')[1])])):
+            orders = await db_shop_furniture.get_orders_user_finish(int(call.data.split(';')[1]))
+            admin = False
+        else:
+            orders = await db_shop_furniture.get_orders_finish()
+            admin = True
+        if len(orders) > 0:
+            for order in orders:
+                id_product = order[2]
+                product_item = await db_shop_furniture.get_product(id_product)
+                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                status = 'Доставлен'
+                await show_order(
+                    call=call,
+                    admin=admin,
+                    photo=photo,
+                    status=status,
+                    product_item=product_item,
+                    order=order,
+                    markup=False
+                )
+        else:
+            await bot.send_message(chat_id=call.from_user.id, text='Пока что то таких заказов нет')
+
+    if 'сancel_order' in call.data:
+        id_order = call.data.split(';')[1]
+        order = await db_shop_furniture.get_order(int(id_order))
+        print(order)
+        message_admins = (f'📢ЗАКАЗ ОТМЕНЕН!\n\n'
+                          f'🟥Название: {order[8]}\n\n'
+                          f'🟧Описание: {order[10]}\n\n'
+                          f'🟨Цена: {order[11]} р\n\n'
+                          f'🟩О заказе:\n'
+                          f'      Контактный телефон: {order[3]}\n'
+                          f'      Адресс доставки: {order[4]}\n'
+                          f'      Количество требуемого товара: {order[5]}')
+        for tg_id in await db_shop_furniture.get_admins():
+            await bot.send_message(chat_id=tg_id[0], text=message_admins,
+                                   reply_markup=await keyboard_panel.admin_panel())
+        await db_shop_furniture.delete_order(id_order)
+        await db_shop_furniture.update_count_product(order[2], order[5]+order[12])
+        await bot.send_message(chat_id=call.from_user.id, text='Заказ отменен',
+                               reply_markup=await keyboard_panel.shop_panel(call.from_user.id))
+
+    if 'finish_order' in call.data:
+        id_order = call.data.split(';')[1]
+        await db_shop_furniture.update_state_order(int(id_order))
+        await bot.send_message(chat_id=call.from_user.id, text='Статус заказа обнавлен',
+                               reply_markup=await keyboard_panel.admin_panel())
+
+
+@dp.callback_query_handler(state=[OrderProduct, OrderCatalog, Order, EditProduct, EditCatalog, AddAdmin])
 async def cancel_order(call: types.CallbackQuery, state: FSMContext):
-
     if 'cancel' in call.data:
         if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(call.from_user.id)])):
-            markup_shop = keyboard.shop_panel()
+            markup_shop = await keyboard_panel.shop_panel(call.from_user.id)
         else:
             markup_shop = await keyboard_panel.admin_panel()
         await state.finish()
@@ -170,17 +331,23 @@ async def cancel_order(call: types.CallbackQuery, state: FSMContext):
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     if not bool(len(await db_shop_furniture.get_admins())):
+        secret_key = get_secret_key()
         await db_shop_furniture.add_admin(
             tg_id=int(message.from_id),
-            phone_number='',
+            secret_key=secret_key,
             state='phone_number'
         )
-        answer = f'Привет admin {message.from_user.first_name}'
+        answer = (f'Привет admin {message.from_user.first_name}\n'
+                  f'Секретный ключ для добавления и удаления админа: {secret_key}\n'
+                  f'Что бы добавить админа нужно передать ему эту команду: Key add admin\n'
+                  f'Затем ввести ключ\n'
+                  f'Что бы перестать быть админом нужно ввести команду: Key delete admin\n'
+                  f'Затем ввести ключ\n')
         markup_shop = await keyboard_panel.admin_panel()
     else:
         if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(message.from_id)])):
             answer = 'Добро пожаловать в магазин!'
-            markup_shop = keyboard.shop_panel()
+            markup_shop = await keyboard_panel.shop_panel(message.from_user.id)
         else:
             answer = f'Привет admin {message.from_user.first_name}'
             markup_shop = await keyboard_panel.admin_panel()
@@ -189,7 +356,69 @@ async def start(message: types.Message):
 
 @dp.message_handler(commands=['shop'])
 async def shop(message: types.Message):
-    await message.answer('Добро пожаловать в магазин!', reply_markup=keyboard.shop_panel())
+    await message.answer('Добро пожаловать в магазин!',
+                         reply_markup=await keyboard_panel.shop_panel(message.from_user.id))
+
+
+@dp.message_handler(text='Заказы')
+async def order_list(message: types.Message):
+    await message.answer(text='Заказы', reply_markup=keyboard.orders_panel(message.from_user.id))
+
+
+@dp.message_handler(text='Получить ключ')
+async def get_key_admin(message: types.Message):
+    replay = (f'Секретный ключ для добавления и удаления админа: {(await db_shop_furniture.get_admins())[0][1]}\n'
+              f'Что бы добавить админа нужно передать ему эту команду: Key add admin\n'
+              f'Затем ввести ключ\n'
+              f'Что бы перестать быть админом нужно ввести команду: Key delete admin\n'
+              f'Затем ввести ключ\n')
+    await message.answer(text=replay, reply_markup=await keyboard_panel.admin_panel())
+
+
+@dp.message_handler(text=f'Key add admin')
+async def add_admin(message: types.Message):
+    await AddAdmin.secret_key.set()
+    await message.answer(text='Введите: secret_key', reply_markup=keyboard.cancel_panel())
+
+
+@dp.message_handler(text=f'Key delete admin')
+async def delete_admin(message: types.Message):
+    await DeleteAdmin.secret_key.set()
+    await message.answer(text='Введите: secret_key', reply_markup=keyboard.cancel_panel())
+
+
+@dp.message_handler(state=AddAdmin.secret_key)
+async def new_admin(message: types.Message, state: FSMContext):
+    replay = 'Не верный secret_key!'
+    markup = await keyboard_panel.shop_panel(message.from_user.id)
+    async with state.proxy() as data:
+        data['secret_key'] = message.text
+        if data['secret_key'] == (await db_shop_furniture.get_admins())[0][1]:
+            await db_shop_furniture.add_admin(
+                tg_id=int(message.from_id),
+                secret_key=message.text,
+                state='phone_number'
+            )
+            replay = 'Вы теперь один из админов!'
+            markup = await keyboard_panel.admin_panel()
+            await state.finish()
+    await message.answer(text=replay, reply_markup=markup)
+
+
+@dp.message_handler(state=DeleteAdmin.secret_key)
+async def logout_admin(message: types.Message, state: FSMContext):
+    replay = 'Не верный secret_key!'
+    markup = await keyboard_panel.shop_panel(message.from_user.id)
+    async with state.proxy() as data:
+        data['secret_key'] = message.text
+        if data['secret_key'] == (await db_shop_furniture.get_admins())[0][1]:
+            await db_shop_furniture.delete_admin(int(message.from_user.id))
+            secret_key = get_secret_key()
+            await db_shop_furniture.update_secret_key(secret_key)
+            replay = 'Вы теперь больше не админ!'
+            markup = await keyboard_panel.shop_panel(message.from_user.id)
+            await state.finish()
+    await message.answer(text=replay, reply_markup=markup)
 
 
 # Товары
@@ -197,7 +426,7 @@ async def shop(message: types.Message):
 async def product_list(message: types.Message):
     admin = False
     if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(message.from_id)])):
-        markup_shop = keyboard.shop_panel()
+        markup_shop = await keyboard_panel.shop_panel(message.from_user.id)
         products = await db_shop_furniture.get_products_available()
     else:
         markup_shop = await keyboard_panel.admin_panel()
@@ -211,12 +440,12 @@ async def product_list(message: types.Message):
                 product_panel = keyboard.product_panel(product_item[0])
             photo = open(f'photo/{product_item[2]}.jpg', 'rb')
             if int(product_item[5]) > 0:
-                count_answer = """В наличии: """ + str(product_item[5]) + """ шт"""
+                count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
             else:
-                count_answer = 'Нет в наличии'
-            await bot.send_photo(message.chat.id, photo, caption=f'Название: {product_item[1]}\n'
-                                 f'Описание:\n{product_item[3]}\n'
-                                 f'Цена: {product_item[4]} р\n'
+                count_answer = '🟩Нет в наличии'
+            await bot.send_photo(message.chat.id, photo, caption=f'🟥Название: {product_item[1]}\n\n'
+                                 f'🟧Описание: {product_item[3]}\n\n'
+                                 f'🟨Цена: {product_item[4]} р\n\n'
                                  f'{count_answer}',
                                  reply_markup=product_panel)
     else:
@@ -326,7 +555,7 @@ async def edit_photo_product(message: types.Message, state: FSMContext):
 async def catalog_list(message: types.Message):
     admin = False
     if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(message.from_id)])):
-        markup_shop = keyboard.shop_panel()
+        markup_shop = await keyboard_panel.shop_panel(message.from_user.id)
     else:
         markup_shop = await keyboard_panel.admin_panel()
         admin = True
@@ -501,14 +730,14 @@ async def order_count_product(message: types.Message, state: FSMContext):
                 data['count_product'] = int(message.text)
                 id_product = data['id_product']
                 product_item = await db_shop_furniture.get_product(id_product)
-                message_admins = (f'ЗАКАЗ!\n'
-                                  f'Название: {product_item[1]}\n'
-                                  f'Описание:\n{product_item[3]}\n'
-                                  f'Цена: {product_item[4]} р\n'
-                                  f'О заказе:\n'
-                                  f'Контактный телефон: {data["phone_number"]}\n'
-                                  f'Адресс доставки: {data["address"]}\n'
-                                  f'Количество требуемого товара: {data["count_product"]}')
+                message_admins = (f'📢ЗАКАЗ!\n\n'
+                                  f'🟥Название: {product_item[1]}\n\n'
+                                  f'🟧Описание: {product_item[3]}\n\n'
+                                  f'🟨Цена: {product_item[4]} р\n\n'
+                                  f'🟩О заказе:\n'
+                                  f'      Контактный телефон: {data["phone_number"]}\n'
+                                  f'      Адресс доставки: {data["address"]}\n'
+                                  f'      Количество требуемого товара: {data["count_product"]}')
                 await db_shop_furniture.update_count_product(product_item[0],
                                                              int(product_item[5]) - int(data['count_product']))
             else:
@@ -521,8 +750,9 @@ async def order_count_product(message: types.Message, state: FSMContext):
     else:
         await db_shop_furniture.add_orders(state)
         for tg_id in await db_shop_furniture.get_admins():
-            await bot.send_message(chat_id=tg_id[0], text=message_admins)
-        await message.answer('Заказ оформлен', reply_markup=keyboard.shop_panel())
+            await bot.send_message(chat_id=tg_id[0], text=message_admins,
+                                   reply_markup= await keyboard_panel.admin_panel())
+        await message.answer('Заказ оформлен', reply_markup=await keyboard_panel.shop_panel(message.from_user.id))
         await state.finish()
 
 if __name__ == '__main__':
