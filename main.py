@@ -159,7 +159,7 @@ async def cancel_order(call: types.CallbackQuery, state: FSMContext):
 
     if 'cancel' in call.data:
         if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(call.from_user.id)])):
-            markup_shop = keyboard.shop_panel()
+            markup_shop = await keyboard_panel.shop_panel(call.from_user.id)
         else:
             markup_shop = await keyboard_panel.admin_panel()
         await state.finish()
@@ -180,7 +180,7 @@ async def start(message: types.Message):
     else:
         if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(message.from_id)])):
             answer = 'Добро пожаловать в магазин!'
-            markup_shop = keyboard.shop_panel()
+            markup_shop = await keyboard_panel.shop_panel(message.from_user.id)
         else:
             answer = f'Привет admin {message.from_user.first_name}'
             markup_shop = await keyboard_panel.admin_panel()
@@ -189,7 +189,8 @@ async def start(message: types.Message):
 
 @dp.message_handler(commands=['shop'])
 async def shop(message: types.Message):
-    await message.answer('Добро пожаловать в магазин!', reply_markup=keyboard.shop_panel())
+    await message.answer('Добро пожаловать в магазин!',
+                         reply_markup=await keyboard_panel.shop_panel(message.from_user.id))
 
 
 # Товары
@@ -197,7 +198,7 @@ async def shop(message: types.Message):
 async def product_list(message: types.Message):
     admin = False
     if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(message.from_id)])):
-        markup_shop = keyboard.shop_panel()
+        markup_shop = await keyboard_panel.shop_panel(message.from_user.id)
         products = await db_shop_furniture.get_products_available()
     else:
         markup_shop = await keyboard_panel.admin_panel()
@@ -326,7 +327,7 @@ async def edit_photo_product(message: types.Message, state: FSMContext):
 async def catalog_list(message: types.Message):
     admin = False
     if not bool(len([item for item in await db_shop_furniture.get_admins() if item[0] == int(message.from_id)])):
-        markup_shop = keyboard.shop_panel()
+        markup_shop = await keyboard_panel.shop_panel(message.from_user.id)
     else:
         markup_shop = await keyboard_panel.admin_panel()
         admin = True
@@ -522,7 +523,7 @@ async def order_count_product(message: types.Message, state: FSMContext):
         await db_shop_furniture.add_orders(state)
         for tg_id in await db_shop_furniture.get_admins():
             await bot.send_message(chat_id=tg_id[0], text=message_admins)
-        await message.answer('Заказ оформлен', reply_markup=keyboard.shop_panel())
+        await message.answer('Заказ оформлен', reply_markup=await keyboard_panel.shop_panel(message.from_user.id))
         await state.finish()
 
 if __name__ == '__main__':
