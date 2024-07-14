@@ -6,7 +6,7 @@ from db import db
 from keyboard import keyboard
 import random, string
 
-bot = Bot('5701794543:AAFIFvGa4pJeGgLcwjI27YsRDuXfXKbrYtI')
+bot = Bot('7062289584:AAESDlt2059jXKdqO-8w2syJvW5qmkDLKbs')
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
