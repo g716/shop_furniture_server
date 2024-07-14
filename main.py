@@ -6,7 +6,7 @@ from db import db
 from keyboard import keyboard
 import random, string
 
-bot = Bot('7062289584:AAESDlt2059jXKdqO-8w2syJvW5qmkDLKbs')
+bot = Bot('5701794543:AAFIFvGa4pJeGgLcwjI27YsRDuXfXKbrYtI')
 
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
@@ -228,22 +228,25 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
         for order in orders:
             id_product = order[2]
             product_item = await db_shop_furniture.get_product(id_product)
-            photo = open(f'photo/{product_item[2]}.jpg', 'rb')
-            if 'waiting' == order[6]:
-                status = 'В ожидании'
-                markup = True
+            if product_item is not None:
+                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                if 'waiting' == order[6]:
+                    status = 'В ожидании'
+                    markup = True
+                else:
+                    status = 'Доставлен'
+                    markup = False
+                await show_order(
+                    call=call,
+                    admin=admin,
+                    photo=photo,
+                    status=status,
+                    product_item=product_item,
+                    order=order,
+                    markup=markup
+                )
             else:
-                status = 'Доставлен'
-                markup = False
-            await show_order(
-                call=call,
-                admin=admin,
-                photo=photo,
-                status=status,
-                product_item=product_item,
-                order=order,
-                markup=markup
-            )
+                await bot.send_message(chat_id=call.from_user.id, text='Товар был удален')
     if 'work_orders' in call.data:
         await bot.send_message(chat_id=call.from_user.id, text='Заказы которые в статусе ожидания:')
 
@@ -258,16 +261,20 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
             for order in orders:
                 id_product = order[2]
                 product_item = await db_shop_furniture.get_product(id_product)
-                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
-                status = 'В ожидании'
-                await show_order(
-                    call=call,
-                    admin=admin,
-                    photo=photo,
-                    status=status,
-                    product_item=product_item,
-                    order=order,
-                )
+                if product_item is not None:
+                    print(product_item)
+                    photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                    status = 'В ожидании'
+                    await show_order(
+                        call=call,
+                        admin=admin,
+                        photo=photo,
+                        status=status,
+                        product_item=product_item,
+                        order=order,
+                    )
+                else:
+                    await bot.send_message(chat_id=call.from_user.id, text='Товар был удален')
         else:
             await bot.send_message(chat_id=call.from_user.id, text='Пока что то таких заказов нет')
     if 'ready_orders' in call.data:
@@ -284,17 +291,20 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
             for order in orders:
                 id_product = order[2]
                 product_item = await db_shop_furniture.get_product(id_product)
-                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
-                status = 'Доставлен'
-                await show_order(
-                    call=call,
-                    admin=admin,
-                    photo=photo,
-                    status=status,
-                    product_item=product_item,
-                    order=order,
-                    markup=False
-                )
+                if product_item is not None:
+                    photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                    status = 'Доставлен'
+                    await show_order(
+                        call=call,
+                        admin=admin,
+                        photo=photo,
+                        status=status,
+                        product_item=product_item,
+                        order=order,
+                        markup=False
+                    )
+                else:
+                    await bot.send_message(chat_id=call.from_user.id, text='Товар был удален')
         else:
             await bot.send_message(chat_id=call.from_user.id, text='Пока что то таких заказов нет')
 
