@@ -2,9 +2,13 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram.dispatcher.handler import CancelHandler
+import asyncio
 from db import db
 from keyboard import keyboard
 import random, string
+from typing import Union
 
 bot = Bot('7062289584:AAESDlt2059jXKdqO-8w2syJvW5qmkDLKbs')
 
@@ -63,12 +67,12 @@ def get_secret_key(length=10):
     return ''.join(random.choice(letters) for i in range(length))
 
 
-async def show_order(call, admin, order, photo, status, product_item, markup=True):
+async def show_order(call, admin, order, status, product_item, markup=True):
     if admin:
         info_number_phone = order[3]
         info_address = order[4]
         if markup:
-            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+            await bot.send_message(call.from_user.id, text=f'🟥Статус заказа: {status}\n\n'
                                                                    f'🟨Название: {product_item[1]}\n\n'
                                                                    f'🟩Описание: {product_item[3]}\n\n'
                                                                    f'🟦Цена: {product_item[4]} р\n\n'
@@ -78,7 +82,7 @@ async def show_order(call, admin, order, photo, status, product_item, markup=Tru
                                                                    f'      Адрес - {info_address}',
                                  reply_markup=keyboard.order_panel_admin(order[0]))
         else:
-            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+            await bot.send_message(call.from_user.id, text=f'🟥Статус заказа: {status}\n\n'
                                                                    f'🟨Название: {product_item[1]}\n\n'
                                                                    f'🟩Описание: {product_item[3]}\n\n'
                                                                    f'🟦Цена: {product_item[4]} р\n\n'
@@ -88,18 +92,51 @@ async def show_order(call, admin, order, photo, status, product_item, markup=Tru
                                                                    f'      Адрес - {info_address}')
     else:
         if markup:
-            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+            await bot.send_message(call.from_user.id, text=f'🟥Статус заказа: {status}\n\n'
                                                                    f'🟨Название: {product_item[1]}\n\n'
                                                                    f'🟩Описание: {product_item[3]}\n\n'
                                                                    f'🟦Цена: {product_item[4]} р\n\n'
                                                                    f'🟪Заказанное количество: {order[5]}',
                                  reply_markup=keyboard.order_panel_user(order[0]))
         else:
-            await bot.send_photo(call.from_user.id, photo, caption=f'🟥Статус заказа: {status}\n\n'
+            await bot.send_message(call.from_user.id, text=f'🟥Статус заказа: {status}\n\n'
                                                                    f'🟨Название: {product_item[1]}\n\n'
                                                                    f'🟩Описание: {product_item[3]}\n\n'
                                                                    f'🟦Цена: {product_item[4]} р\n\n'
                                                                    f'🟪Заказанное количество: {order[5]}')
+
+
+class AlbumMiddleware(BaseMiddleware):
+    """This middleware is for capturing media groups."""
+
+    album_data: dict = {}
+
+    def __init__(self, latency: Union[int, float] = 0.01):
+        """
+        You can provide custom latency to make sure
+        albums are handled properly in highload.
+        """
+        self.latency = latency
+        super().__init__()
+
+    async def on_process_message(self, message: types.Message, data: dict):
+        if not message.media_group_id:
+            return
+
+        try:
+            self.album_data[message.media_group_id].append(message)
+            raise CancelHandler()  # Tell aiogram to cancel handler for this group element
+        except KeyError:
+            self.album_data[message.media_group_id] = [message]
+            await asyncio.sleep(self.latency)
+
+            message.conf["is_last"] = True
+            data["album"] = self.album_data[message.media_group_id]
+
+    async def on_post_process_message(self, message: types.Message, result: dict, data: dict):
+        """Clean up after handling our album."""
+        if message.media_group_id and message.conf.get("is_last"):
+            del self.album_data[message.media_group_id]
 
 
 @dp.callback_query_handler(state=OrderProduct.catalog)
@@ -189,16 +226,23 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
             for data_catalog in await db_shop_furniture.get_id_products_from_catalog(int(call.data.split(';')[1])):
                 id_product = data_catalog[1]
                 product_item = await db_shop_furniture.get_product(id_product)
-                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                if ';' in product_item[2]:
+                    media = types.MediaGroup()
+                    for item in range(len(product_item[2].split(';')) - 1):
+                        media.attach_photo(types.InputFile(f'photo/{product_item[2].split(";")[item]}.jpg'))
+                    await bot.send_media_group(call.from_user.id, media=media)
+                else:
+                    photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                    await bot.send_photo(call.from_user.id, photo)
                 if int(product_item[5]) > 0:
                     count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
                 else:
                     count_answer = '🟩Нет в наличии'
-                await bot.send_photo(call.from_user.id, photo, caption=f'🟥Название: {product_item[1]}\n\n'
-                                                                     f'🟧Описание: {product_item[3]}\n\n'
-                                                                     f'🟨Цена: {product_item[4]} р\n\n'
-                                                                     f'{count_answer}',
-                                     reply_markup=keyboard.product_panel(product_item[0]))
+                await bot.send_message(call.from_user.id, text=f'🟥Название: {product_item[1]}\n\n'
+                                                             f'🟧Описание: {product_item[3]}\n\n'
+                                                             f'🟨Цена: {product_item[4]} р\n\n'
+                                                             f'{count_answer}',
+                                       reply_markup=keyboard.product_panel(product_item[0]))
         else:
             await bot.send_message(chat_id=call.from_user.id, text='Простите но каталог пока что пуст')
     if 'delete_catalog' in call.data:
@@ -229,7 +273,14 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
             id_product = order[2]
             product_item = await db_shop_furniture.get_product(id_product)
             if product_item is not None:
-                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                if ';' in product_item[2]:
+                    media = types.MediaGroup()
+                    for item in range(len(product_item[2].split(';')) - 1):
+                        media.attach_photo(types.InputFile(f'photo/{product_item[2].split(";")[item]}.jpg'))
+                    await bot.send_media_group(call.from_user.id, media=media)
+                else:
+                    photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                    await bot.send_photo(call.from_user.id, photo)
                 if 'waiting' == order[6]:
                     status = 'В ожидании'
                     markup = True
@@ -239,7 +290,6 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
                 await show_order(
                     call=call,
                     admin=admin,
-                    photo=photo,
                     status=status,
                     product_item=product_item,
                     order=order,
@@ -262,13 +312,18 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
                 id_product = order[2]
                 product_item = await db_shop_furniture.get_product(id_product)
                 if product_item is not None:
-                    print(product_item)
-                    photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                    if ';' in product_item[2]:
+                        media = types.MediaGroup()
+                        for item in range(len(product_item[2].split(';')) - 1):
+                            media.attach_photo(types.InputFile(f'photo/{product_item[2].split(";")[item]}.jpg'))
+                        await bot.send_media_group(call.from_user.id, media=media)
+                    else:
+                        photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                        await bot.send_photo(call.from_user.id, photo)
                     status = 'В ожидании'
                     await show_order(
                         call=call,
                         admin=admin,
-                        photo=photo,
                         status=status,
                         product_item=product_item,
                         order=order,
@@ -292,12 +347,18 @@ async def callback_query(call: types.CallbackQuery, state: FSMContext):
                 id_product = order[2]
                 product_item = await db_shop_furniture.get_product(id_product)
                 if product_item is not None:
-                    photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                    if ';' in product_item[2]:
+                        media = types.MediaGroup()
+                        for item in range(len(product_item[2].split(';')) - 1):
+                            media.attach_photo(types.InputFile(f'photo/{product_item[2].split(";")[item]}.jpg'))
+                        await bot.send_media_group(call.from_user.id, media=media)
+                    else:
+                        photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                        await bot.send_photo(call.from_user.id, photo)
                     status = 'Доставлен'
                     await show_order(
                         call=call,
                         admin=admin,
-                        photo=photo,
                         status=status,
                         product_item=product_item,
                         order=order,
@@ -457,16 +518,26 @@ async def product_list(message: types.Message):
                 product_panel = keyboard.product_panel_admin(product_item[0])
             else:
                 product_panel = keyboard.product_panel(product_item[0])
-            photo = open(f'photo/{product_item[2]}.jpg', 'rb')
-            if int(product_item[5]) > 0:
-                count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
+            if ';' in product_item[2]:
+                media = types.MediaGroup()
+                for item in range(len(product_item[2].split(';')) - 1):
+                    media.attach_photo(types.InputFile(f'photo/{product_item[2].split(";")[item]}.jpg'))
+                await bot.send_media_group(message.chat.id, media=media)
             else:
-                count_answer = '🟩Нет в наличии'
-            await bot.send_photo(message.chat.id, photo, caption=f'🟥Название: {product_item[1]}\n\n'
-                                 f'🟧Описание: {product_item[3]}\n\n'
-                                 f'🟨Цена: {product_item[4]} р\n\n'
-                                 f'{count_answer}',
-                                 reply_markup=product_panel)
+                photo = open(f'photo/{product_item[2]}.jpg', 'rb')
+                await bot.send_photo(message.chat.id, photo)
+            try:
+                if int(product_item[5]) > 0:
+                    count_answer = """🟩В наличии: """ + str(product_item[5]) + """ шт"""
+                else:
+                    count_answer = '🟩Нет в наличии'
+                await bot.send_message(message.chat.id, text=f'🟥Название: {product_item[1]}\n\n'
+                                                             f'🟧Описание: {product_item[3]}\n\n'
+                                                             f'🟨Цена: {product_item[4]} р\n\n'
+                                                             f'{count_answer}',
+                                       reply_markup=product_panel)
+            except:
+                print('ok')
     else:
         await message.answer('Товаров пока что нет', reply_markup=markup_shop)
 
@@ -553,8 +624,8 @@ async def edit_count_product(message: types.Message, state: FSMContext):
         await state.finish()
 
 
-@dp.message_handler(content_types=['photo'], state=EditProduct.image)
-async def edit_photo_product(message: types.Message, state: FSMContext):
+@dp.message_handler(content_types=types.ContentType.ANY,  state=EditProduct.image)
+async def edit_photo_product(message: types.Message, state: FSMContext, album=None):
     async with state.proxy() as data:
         data_product = await db_shop_furniture.get_product(int(data['id_']))
         data['name'] = data_product[1]
@@ -562,7 +633,26 @@ async def edit_photo_product(message: types.Message, state: FSMContext):
         data['price'] = int(data_product[4])
         data['about'] = data_product[3]
         data['count'] = int(data_product[5])
-        data['image'] = message.photo[0].file_id
+        data['image'] = ''
+        if album is not None:
+            mg = types.MediaGroup()
+            for obj in album:
+                if obj.photo:
+                    await message.photo[-1].download(destination_file=f'photo/{obj.photo[0].file_id}.jpg')
+                    data['image'] += obj.photo[0].file_id + ';'
+                    file_id = obj.photo[-1].file_id
+                else:
+                    await message.photo[-1].download(destination_file=f'photo/{obj[obj.content_type].file_id}.jpg')
+                    data['image'] += obj[obj.content_type].file_id + ';'
+                    file_id = obj[obj.content_type].file_id
+            try:
+                # We can also add a caption to each file by specifying `"caption": "text"`
+                mg.attach({"media": file_id, "type": obj.content_type})
+            except ValueError:
+                return await message.answer("Боюсь что вы сделали что-то не так")
+        else:
+            data['image'] = message.photo[0].file_id + ';'
+            await message.photo[-1].download(destination_file=f'photo/{message.photo[0].file_id}.jpg')
         await message.photo[-1].download(destination_file=f'photo/{message.photo[0].file_id}.jpg')
     await db_shop_furniture.update_product(state)
     await message.answer('Фотография обнавленна', reply_markup=await keyboard_panel.admin_panel())
@@ -701,11 +791,38 @@ async def add_item_photo_check(message: types.Message):
     await message.answer('Это не фотография!')
 
 
-@dp.message_handler(content_types=['photo'], state=OrderProduct.image)
-async def add_item_photo(message: types.Message, state: FSMContext):
+# @dp.message_handler(content_types=['photo'], state=OrderProduct.image)
+# async def add_item_photo(message: types.Message, state: FSMContext):
+#     async with state.proxy() as data:
+#         data['image'] = message.photo[0].file_id + ';'
+#         await message.photo[-1].download(destination_file=f'photo/{message.photo[0].file_id}.jpg')
+#     await message.answer('Выберите каталог для товара', reply_markup=await keyboard_panel.inline_catalog_panel())
+#     await OrderProduct.next()
+
+
+@dp.message_handler(content_types=types.ContentType.ANY, state=OrderProduct.image)
+async def add_item_photo(message: types.Message, state: FSMContext, album=None):
     async with state.proxy() as data:
-        data['image'] = message.photo[0].file_id
-        await message.photo[-1].download(destination_file=f'photo/{message.photo[0].file_id}.jpg')
+        data['image'] = ''
+        if album is not None:
+            mg = types.MediaGroup()
+            for obj in album:
+                if obj.photo:
+                    await message.photo[-1].download(destination_file=f'photo/{obj.photo[0].file_id}.jpg')
+                    data['image'] += obj.photo[0].file_id + ';'
+                    file_id = obj.photo[-1].file_id
+                else:
+                    await message.photo[-1].download(destination_file=f'photo/{obj[obj.content_type].file_id}.jpg')
+                    data['image'] += obj[obj.content_type].file_id + ';'
+                    file_id = obj[obj.content_type].file_id
+            try:
+                # We can also add a caption to each file by specifying `"caption": "text"`
+                mg.attach({"media": file_id, "type": obj.content_type})
+            except ValueError:
+                return await message.answer("Боюсь что вы сделали что-то не так")
+        else:
+            data['image'] = message.photo[0].file_id + ';'
+            await message.photo[-1].download(destination_file=f'photo/{message.photo[0].file_id}.jpg')
     await message.answer('Выберите каталог для товара', reply_markup=await keyboard_panel.inline_catalog_panel())
     await OrderProduct.next()
 
@@ -766,4 +883,5 @@ async def order_count_product(message: types.Message, state: FSMContext):
         await state.finish()
 
 if __name__ == '__main__':
+    dp.middleware.setup(AlbumMiddleware())
     executor.start_polling(dp, skip_updates=True)
